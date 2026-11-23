@@ -1,0 +1,1115 @@
+{
+  "info": {
+    "name": "TutorDesk BE",
+    "description": "Every TutorDesk API endpoint (REQUIREMENTS §7) plus the main error cases.\n\nSetup: import this collection and `TutorDesk-Local.postman_environment.json`, pick the \"TutorDesk Local\" environment, start the API (`npm run db:local`, `npm run seed`, optionally `npm run seed:demo`, `npm run dev`).\n\nAuth is the httpOnly cookie `tutordesk_token`: run **Auth → Login (admin)** first — Postman keeps the cookie for localhost and sends it with every request. **Auth → Logout** clears it.\n\nIds are saved automatically: Create student → `studentId`, List fees → `feeId`, Create batch → `batchId`. `today` and `currentMonth` are set in IST before each request.\n\nRun the folders top to bottom (or use the Collection Runner) — each request checks its expected status code.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// \"today\" and \"this month\" in the center's timezone (Asia/Kolkata, UTC+5:30), like the API.",
+          "const indiaNow = new Date(Date.now() + 330 * 60 * 1000).toISOString();",
+          "pm.collectionVariables.set('today', indiaNow.slice(0, 10));",
+          "pm.collectionVariables.set('currentMonth', indiaNow.slice(0, 7));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "today",
+      "value": ""
+    },
+    {
+      "key": "currentMonth",
+      "value": ""
+    },
+    {
+      "key": "studentId",
+      "value": ""
+    },
+    {
+      "key": "studentCode",
+      "value": ""
+    },
+    {
+      "key": "feeId",
+      "value": ""
+    },
+    {
+      "key": "batchId",
+      "value": ""
+    },
+    {
+      "key": "newAdminPassword",
+      "value": ""
+    },
+    {
+      "key": "studentPassword",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 ok', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + user', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().user.role).to.eql('ADMIN');",
+                  "});",
+                  "pm.test('sets the httpOnly cookie', () => pm.expect(pm.cookies.has('tutordesk_token')).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Current user (me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Update profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin Name\",\n  \"phone\": \"+91 98765 43210\",\n  \"address\": \"12 Example Street\",\n  \"centerName\": \"Example Tuition Center\",\n  \"branch\": null,\n  \"city\": \"Chennai\",\n  \"state\": \"Tamil Nadu\",\n  \"feeDueDay\": 10\n}"
+            },
+            "url": "{{baseUrl}}/auth/profile"
+          }
+        },
+        {
+          "name": "Change password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"204\", () => pm.response.to.have.status(204));",
+                  "// Keep the environment in sync so Login keeps working.",
+                  "if (pm.response.code === 204) { pm.environment.set(\"adminPassword\", pm.collectionVariables.get(\"newAdminPassword\")); }"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const current = pm.environment.get(\"adminPassword\");",
+                  "pm.collectionVariables.set(\"newAdminPassword\", current === \"Tutor@2026\" ? \"Change@Me123\" : \"Tutor@2026\");"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{adminPassword}}\",\n  \"newPassword\": \"{{newAdminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/change-password"
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        {
+          "name": "Create student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const { student } = pm.response.json();",
+                  "if (student) {",
+                  "  pm.collectionVariables.set('studentId', student.id);",
+                  "  pm.collectionVariables.set('studentCode', student.studentCode);",
+                  "}",
+                  "pm.collectionVariables.set(\"studentPassword\", \"Student@123\");"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Kavya\",\n  \"lastName\": \"Raman\",\n  \"email\": null,\n  \"phone\": \"\",\n  \"parentName\": \"Suresh Raman\",\n  \"parentPhone\": \"+91 98400 12345\",\n  \"grade\": \"Class 8\",\n  \"subjects\": [\"Mathematics\", \"English\"],\n  \"monthlyFee\": 200000,\n  \"joinDate\": \"{{today}}\",\n  \"password\": \"Student@123\"\n}"
+            },
+            "url": "{{baseUrl}}/students"
+          }
+        },
+        {
+          "name": "List students",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/students?page=1&limit=10"
+          }
+        },
+        {
+          "name": "List students (search + filters)",
+          "description": "search: Student ID or name. paymentStatus: PAID | PENDING | OVERDUE | PARTIAL (this month). paidFrom / paidTo: YYYY-MM-DD. Disable the params you don't need — empty params are never sent by the FE.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/students?search=kav&paymentStatus=PENDING&paidFrom={{currentMonth}}-01&paidTo={{today}}&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "kav"
+                },
+                {
+                  "key": "paymentStatus",
+                  "value": "PENDING"
+                },
+                {
+                  "key": "paidFrom",
+                  "value": "{{currentMonth}}-01",
+                  "disabled": true
+                },
+                {
+                  "key": "paidTo",
+                  "value": "{{today}}",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/students/{{studentId}}"
+          }
+        },
+        {
+          "name": "Update student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Kavya\",\n  \"lastName\": \"Raman\",\n  \"email\": \"kavya.raman@example.com\",\n  \"phone\": \"98400 54321\",\n  \"parentName\": \"Suresh Raman\",\n  \"parentPhone\": \"+91 98400 12345\",\n  \"grade\": \"Class 9\",\n  \"subjects\": [\"Mathematics\", \"English\", \"Science\"],\n  \"monthlyFee\": 250000,\n  \"joinDate\": \"{{today}}\"\n}"
+            },
+            "url": "{{baseUrl}}/students/{{studentId}}"
+          }
+        },
+        {
+          "name": "Payment history",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/students/{{studentId}}/payment-history"
+          }
+        },
+        {
+          "name": "Reset student password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const { temporaryPassword } = pm.response.json();",
+                  "if (temporaryPassword) { pm.collectionVariables.set(\"studentPassword\", temporaryPassword); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/students/{{studentId}}/reset-password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fees",
+      "item": [
+        {
+          "name": "List fees (month)",
+          "description": "Saves the first row's id as feeId. Pick another month (≤ current) to see older months.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const [firstFee] = pm.response.json().fees || [];",
+                  "if (firstFee) { pm.collectionVariables.set('feeId', firstFee.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/fees?month={{currentMonth}}&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fees"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "{{currentMonth}}"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "paymentStatus",
+                  "value": "OVERDUE",
+                  "disabled": true
+                },
+                {
+                  "key": "paidFrom",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "paidTo",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edit fee (no payment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"totalFee\": 200000,\n  \"dueDate\": \"{{today}}\",\n  \"payment\": null\n}"
+            },
+            "url": "{{baseUrl}}/fees/{{feeId}}"
+          }
+        },
+        {
+          "name": "Edit fee + record a payment",
+          "description": "Amounts are paise (₹500 = 50000). Each payment is stored as its own record.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"totalFee\": 200000,\n  \"dueDate\": \"{{today}}\",\n  \"payment\": {\n    \"amount\": 50000,\n    \"paidOn\": \"{{today}}\",\n    \"method\": \"UPI\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/fees/{{feeId}}"
+          }
+        },
+        {
+          "name": "Record payment reminder (WhatsApp)",
+          "description": "Records the initiation only (status INITIATED). 409 once nothing is outstanding.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"WHATSAPP\",\n  \"type\": \"MANUAL\",\n  \"contact\": \"+919840012345\"\n}"
+            },
+            "url": "{{baseUrl}}/fees/{{feeId}}/reminders"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Batches",
+      "item": [
+        {
+          "name": "Create batch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const { batch } = pm.response.json();",
+                  "if (batch) { pm.collectionVariables.set('batchId', batch.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Class 8 Maths – Morning\",\n  \"description\": \"Weekday mornings\",\n  \"startTime\": \"08:00\",\n  \"endTime\": \"09:00\",\n  \"studentIds\": [\"{{studentId}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/batches"
+          }
+        },
+        {
+          "name": "List batches",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/batches?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "batches"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "maths",
+                  "disabled": true
+                },
+                {
+                  "key": "startTime",
+                  "value": "08:00",
+                  "disabled": true
+                },
+                {
+                  "key": "endTime",
+                  "value": "09:00",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Batch time slots",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/batches/time-slots"
+          }
+        },
+        {
+          "name": "Get batch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/batches/{{batchId}}"
+          }
+        },
+        {
+          "name": "Update batch (clear description and time)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Class 8 Maths\",\n  \"description\": null,\n  \"startTime\": null,\n  \"endTime\": null,\n  \"studentIds\": [\"{{studentId}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/batches/{{batchId}}"
+          }
+        },
+        {
+          "name": "Delete batch (hard)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/batches/{{batchId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Stats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dashboard/stats"
+          }
+        },
+        {
+          "name": "Fee collection (this month, per day)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dashboard/fee-collection?from={{currentMonth}}-01&to={{today}}"
+          }
+        },
+        {
+          "name": "Fee collection (custom range, per month)",
+          "description": "Ranges over 62 days are grouped by month. from must be within the last 2 years.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dashboard/fee-collection?from=2026-01-01&to={{today}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Error cases",
+      "description": "Each request shows one error response. Run Auth → Login (admin) first.",
+      "item": [
+        {
+          "name": "401 wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{adminEmail}}\",\n  \"password\": \"Wrong@1234\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "422 login validation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"not-an-email\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "422 student field errors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"K4vya\",\n  \"lastName\": \"\",\n  \"email\": \"not-an-email\",\n  \"phone\": \"123\",\n  \"parentName\": \"Suresh\",\n  \"parentPhone\": \"\",\n  \"grade\": \"Class 13\",\n  \"subjects\": [],\n  \"monthlyFee\": 150050,\n  \"joinDate\": \"2026-02-30\",\n  \"password\": \"weak\"\n}"
+            },
+            "url": "{{baseUrl}}/students"
+          }
+        },
+        {
+          "name": "409 duplicate student email",
+          "description": "Run Students → Update student first (it sets kavya.raman@example.com).",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Other\",\n  \"lastName\": \"Student\",\n  \"email\": \"kavya.raman@example.com\",\n  \"phone\": \"\",\n  \"parentName\": \"Some Parent\",\n  \"parentPhone\": \"9840012399\",\n  \"grade\": \"Class 8\",\n  \"subjects\": [\"English\"],\n  \"monthlyFee\": 100000,\n  \"joinDate\": \"{{today}}\",\n  \"password\": \"Student@123\"\n}"
+            },
+            "url": "{{baseUrl}}/students"
+          }
+        },
+        {
+          "name": "400 total fee below paid",
+          "description": "Run Fees → Edit fee + record a payment first.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"totalFee\": 0,\n  \"dueDate\": \"{{today}}\",\n  \"payment\": null\n}"
+            },
+            "url": "{{baseUrl}}/fees/{{feeId}}"
+          }
+        },
+        {
+          "name": "400 payment above outstanding",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"totalFee\": 200000,\n  \"dueDate\": \"{{today}}\",\n  \"payment\": { \"amount\": 9999900, \"paidOn\": \"{{today}}\", \"method\": \"CASH\" }\n}"
+            },
+            "url": "{{baseUrl}}/fees/{{feeId}}"
+          }
+        },
+        {
+          "name": "422 future month",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/fees?month=2999-01"
+          }
+        },
+        {
+          "name": "404 invalid id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/students/S100000001"
+          }
+        },
+        {
+          "name": "422 fee collection range",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dashboard/fee-collection?from=2000-01-01&to={{today}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student session",
+      "description": "Logs in as the student created in Students, checks the role rules, then logs the admin back in.",
+      "item": [
+        {
+          "name": "Login (student, by Student ID)",
+          "description": "Uses the studentCode and password saved by Students → Create student / Reset student password.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{studentCode}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Current user (student)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "403 admin route as student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/students"
+          }
+        },
+        {
+          "name": "Login (admin) again",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + user', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().user.role).to.eql('ADMIN');",
+                  "});",
+                  "pm.test('sets the httpOnly cookie', () => pm.expect(pm.cookies.has('tutordesk_token')).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Delete student (soft)",
+          "description": "Soft delete: the student disappears everywhere and can't log in; payments stay. Run Get student afterwards → 404.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/students/{{studentId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

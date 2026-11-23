@@ -56,6 +56,7 @@ Sibling repo on this machine: `c:\PersonalProject\TutorDesk-FE` (its `REQUIREMEN
 - Money in **integer paise**; date-only values as `"YYYY-MM-DD"` strings and months as `"YYYY-MM"`; UUID string `_id` exposed as `id`; enum values UPPER_SNAKE_CASE identical to the FE.
 
 ## Working plan (start: 2026-11-21)
+**2026-11-23 (user):** all endpoints are tested in Postman first (`postman/`); **no FE integration until Postman testing is done.**
 Follow REQUIREMENTS **§13.9**: setup (health route, env, DB, errors, CORS/cookies) → **auth** + seeder → switch the FE to the BE and check Login → **Students** API → check the Students page → **Fees** (records, payments, history, reminders) → check the Fees page → hardening (rate limit, tests with Jest/Supertest + mongodb-memory-server, README). Confirm at setup: TypeScript (recommended) or JavaScript.
 
 ## Open questions (carried from the FE)

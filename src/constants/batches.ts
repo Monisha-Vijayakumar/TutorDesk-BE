@@ -1,0 +1,2 @@
+export const MAX_BATCH_NAME_LENGTH = 100
+export const MAX_BATCH_DESCRIPTION_LENGTH = 500
